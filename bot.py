@@ -1,21 +1,32 @@
 import os
 import datetime
+import threading
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from supabase import create_client, Client
 
-# خواندن مقادیر حساس از متغیرهای محیطی Render
+# ۱. ساخت سرور کوچک Flask برای زنده نگه داشتن سرویس در Render
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "Gym Bot is running alive!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    web_app.run(host="0.0.0.0", port=port)
+
+# ۲. متغیرهای محیطی
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-# اتصال به دیتابیس Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# دستور start/
+# ۳. منطق بات تلگرام
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    # ثبت یا آپدیت کاربر در دیتابیس
     supabase.table("users").upsert({
         "user_id": user.id,
         "full_name": user.full_name,
@@ -34,7 +45,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# مدیریت دکمه‌های شیشه‌ای
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -42,7 +52,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     today = str(datetime.date.today())
 
     if query.data == "log_workout":
-        # بررسی اینکه امروز ثبت کرده یا نه
         res = supabase.table("users").select("last_workout_date, points").eq("user_id", user_id).execute()
         user_data = res.data[0] if res.data else None
 
@@ -66,6 +75,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text, parse_mode="Markdown")
 
 def main():
+    # اجرای Flask در یک Thread جداگانه
+    threading.Thread(target=run_flask, daemon=True).start()
+
+    # اجرای بات تلگرام
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
