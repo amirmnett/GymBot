@@ -1,6 +1,7 @@
 import os
 import logging
 import datetime
+import asyncio
 import threading
 from flask import Flask
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
@@ -13,7 +14,7 @@ from supabase import create_client, Client
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# وب‌سرور Flask برای Render
+# وب‌سرور Flask برای زنده نگه‌داشتن در Render
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -26,28 +27,30 @@ def run_flask():
 
 # خواندن متغیرها
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# حالت‌های ConversationHandler (دقیقاً ۱۹ متغیر)
+# وضعیت‌های ConversationHandler
 (
     OB_AGE, OB_HEIGHT, OB_WEIGHT, OB_ARM, OB_CHEST, OB_WAIST, OB_GOAL,
     PLAN_DAYS_COUNT, PLAN_DAY_NAME, PLAN_EX_COUNT, PLAN_EX_NAME, PLAN_EX_SETS_REPS, PLAN_EX_SUPERSET, PLAN_EX_SUPERSET_WITH,
-    BODY_WEIGHT, BODY_ARM, BODY_CHEST, BODY_WAIST, DUMMY_STATE
-) = range(19)
+    BODY_WEIGHT, BODY_ARM, BODY_CHEST, BODY_WAIST,
+    POST_PHOTO, POST_CAPTION
+) = range(20)
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("🏋️‍♂️ شروع تمرین امروز (باشگاه)"), KeyboardButton("🏆 جدول رده‌بندی")],
+        [KeyboardButton("🏋️‍♂️ شروع تمرین امروز (باشگاه)"), KeyboardButton("🌐 شبکه اجتماعی ورزشکاران")],
         [KeyboardButton("📝 ثبت/بازنویسی برنامه تمرینی"), KeyboardButton("📋 مشاهده برنامه من")],
-        [KeyboardButton("👤 پروفایل من"), KeyboardButton("📊 ثبت سایز و وزن جدید")]
+        [KeyboardButton("👤 پروفایل من"), KeyboardButton("📊 ثبت سایز و وزن جدید")],
+        [KeyboardButton("🏆 جدول رده‌بندی")]
     ],
     resize_keyboard=True
 )
 
-# --- ۱. ثبت‌نام و آنبوردینگ کامل ---
+# --- ۱. آنبوردینگ و ثبت‌نام اولیه ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     try:
@@ -130,7 +133,6 @@ async def ob_waist(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ob_goal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     goal = update.message.text
     user_id = update.effective_user.id
-    
     try:
         supabase.table("users").update({
             "age": context.user_data.get("age"),
@@ -170,7 +172,6 @@ async def plan_days_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data["total_days"] = int(text)
     context.user_data["current_day_idx"] = 1
-    context.user_data["days_data"] = []
 
     user_id = update.effective_user.id
     try:
@@ -239,7 +240,6 @@ async def plan_ex_superset_with(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def save_exercise_and_next(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan_id = context.user_data.get("current_plan_id")
-    
     try:
         supabase.table("plan_exercises").insert({
             "plan_id": plan_id,
@@ -257,34 +257,24 @@ async def save_exercise_and_next(update: Update, context: ContextTypes.DEFAULT_T
 
     if curr_ex < tot_ex:
         context.user_data["current_ex_idx"] += 1
-        await update.message.reply_text(
-            f"✅ ذخیره شد.\n\nحرکت {curr_ex + 1} از {tot_ex}: نام حرکت چیست؟",
-            reply_markup=MAIN_KEYBOARD
-        )
+        await update.message.reply_text(f"✅ ذخیره شد.\n\nحرکت {curr_ex + 1} از {tot_ex}: نام حرکت چیست؟")
         return PLAN_EX_NAME
     else:
         curr_day = context.user_data["current_day_idx"]
         tot_days = context.user_data["total_days"]
         if curr_day < tot_days:
             context.user_data["current_day_idx"] += 1
-            await update.message.reply_text(
-                f"✅ تمام حرکات این روز ثبت شد!\n\nحالا نام روز {curr_day + 1} چیست؟ (مثلاً: روز دوم - پا و سرشانه):",
-                reply_markup=MAIN_KEYBOARD
-            )
+            await update.message.reply_text(f"✅ تمام حرکات این روز ثبت شد!\n\nحالا نام روز {curr_day + 1} چیست؟:")
             return PLAN_DAY_NAME
         else:
-            await update.message.reply_text(
-                "🔥 فوق‌العاده است! تمام روزها و حرکات برنامه‌ات با موفقیت ذخیره شدند.",
-                reply_markup=MAIN_KEYBOARD
-            )
+            await update.message.reply_text("🔥 برنامه‌ات با موفقیت ذخیره شد.", reply_markup=MAIN_KEYBOARD)
             return ConversationHandler.END
 
-# --- ۳. اجرا و تیک زدن حرکات موقع تمرین ---
+# --- ۳. دستیار هوشمند تمرین (Ultimate Gym Mode) ---
 async def start_gym_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     try:
         res = supabase.table("workout_plans").select("*").eq("user_id", user_id).order("day_number").execute()
-        
         if not res.data:
             await update.message.reply_text("هنوز برنامه‌ای ثبت نکرده‌ای! ابتدا از دکمه '📝 ثبت/بازنویسی برنامه تمرینی' استفاده کن.")
             return
@@ -293,10 +283,9 @@ async def start_gym_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for day in res.data:
             keyboard.append([InlineKeyboardButton(f"🏋️‍♂️ {day['day_name']}", callback_data=f"start_day_{day['id']}")])
         
-        await update.message.reply_text("امروز برنامه کدام روز را می‌خواهی اجرا کنی؟", reply_markup=InlineKeyboardMarkup(keyboard))
+        await update.message.reply_text("امروز برنامه کدام روز را می‌خواهی اجرا کنی؟ 🔥", reply_markup=InlineKeyboardMarkup(keyboard))
     except Exception as e:
         logger.error(f"Error in gym session: {e}")
-        await update.message.reply_text("خطا در دریافت اطلاعات.")
 
 async def handle_gym_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -305,23 +294,39 @@ async def handle_gym_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if data.startswith("start_day_"):
         plan_id = int(data.split("_")[2])
-        try:
-            res = supabase.table("plan_exercises").select("*").eq("plan_id", plan_id).execute()
-            exercises = res.data
+        res = supabase.table("plan_exercises").select("*").eq("plan_id", plan_id).execute()
+        exercises = res.data
 
-            if not exercises:
-                await query.edit_message_text("حرکتی برای این روز یافت نشد.")
-                return
+        if not exercises:
+            await query.edit_message_text("حرکتی برای این روز یافت نشد.")
+            return
 
-            context.user_data["gym_exercises"] = exercises
-            context.user_data["gym_current_idx"] = 0
-            await show_current_gym_exercise(query, context)
-        except Exception as e:
-            logger.error(f"Error starting gym exercise: {e}")
+        context.user_data["gym_exercises"] = exercises
+        context.user_data["gym_current_idx"] = 0
+        await show_current_gym_exercise(query, context)
 
     elif data == "next_gym_ex":
         context.user_data["gym_current_idx"] += 1
         await show_current_gym_exercise(query, context)
+
+    elif data.startswith("timer_"):
+        seconds = int(data.split("_")[1])
+        await query.answer(f"⏱️ تایمر {seconds} ثانیه‌ای فعال شد!")
+        await start_rest_timer(query, context, seconds)
+
+async def start_rest_timer(query, context, seconds):
+    chat_id = query.message.chat_id
+    msg = await context.bot.send_message(chat_id=chat_id, text=f"⏱️ **استراحت:** {seconds} ثانیه باقیمانده...", parse_mode="Markdown")
+    
+    for left in range(seconds - 15, 0, -15):
+        await asyncio.sleep(15)
+        try:
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=msg.message_id, text=f"⏱️ **استراحت:** {left} ثانیه باقیمانده...", parse_mode="Markdown")
+        except Exception:
+            pass
+    
+    await asyncio.sleep(min(15, seconds))
+    await context.bot.send_message(chat_id=chat_id, text="🔔 **وقت استراحت تمام شد! ست بعدی را با قدرت بزن! 💪**", parse_mode="Markdown")
 
 async def show_current_gym_exercise(query, context):
     idx = context.user_data["gym_current_idx"]
@@ -334,29 +339,154 @@ async def show_current_gym_exercise(query, context):
         try:
             res = supabase.table("users").select("points").eq("user_id", user_id).execute()
             pts = res.data[0].get("points") or 0 if res.data else 0
-            new_pts = pts + 10
+            new_pts = pts + 15
 
             supabase.table("users").update({"last_workout_date": today, "points": new_pts}).eq("user_id", user_id).execute()
-            supabase.table("workout_logs").insert({"user_id": user_id}).execute()
 
-            await query.edit_message_text(f"🥇 خسته نباشی قهرمان! تمرین امروز با موفقیت تمام شد.\n\n۱۰ امتیاز جدید گرفتی! مجموع امتیازات: {new_pts} 🪙")
+            await query.edit_message_text(f"🥇 **خسته نباشی قهرمان! تمرین امروز با موفقیت تمام شد.**\n\n۱۵ امتیاز جدید گرفتی! مجموع امتیازات: {new_pts} 🪙", parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Error completing gym session: {e}")
-            await query.edit_message_text("تمرین شما با موفقیت ثبت شد.")
         return
 
     ex = exercises[idx]
-    txt = f"🏋️‍♂️ **حرکت {idx + 1} از {len(exercises)}:**\n\n"
-    txt += f"📌 **{ex['exercise_name']}**\n"
-    txt += f"🔢 **مقدار:** {ex['reps']}\n"
+    txt = f"🏋️‍♂️ **حرکت {idx + 1} از {len(exercises)}**\n"
+    txt += "━━━━━━━\n"
+    txt += f"📌 **نام حرکت:** {ex['exercise_name']}\n"
+    txt += f"🔢 **ست/تکرار:** {ex['reps']}\n"
     
     if ex.get("is_superset"):
         txt += f"🔥 **سوپرست با:** {ex.get('superset_with')}\n"
 
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ انجام شد (حرکت بعدی ➔)", callback_data="next_gym_ex")]])
+    txt += "\n⏱️ **تایمر استراحت بین ست‌ها:**"
+
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⏱️ ۶۰ ثانیه", callback_data="timer_60"),
+            InlineKeyboardButton("⏱️ ۹۰ ثانیه", callback_data="timer_90"),
+            InlineKeyboardButton("⏱️ ۱۲۰ ثانیه", callback_data="timer_120")
+        ],
+        [InlineKeyboardButton("✅ انجام شد (حرکت بعدی ➔)", callback_data="next_gym_ex")]
+    ])
     await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=kb)
 
-# --- ۴. پروفایل و مشاهده برنامه ---
+# --- ۴. شبکه اجتماعی (Social Feed) ---
+async def social_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("📸 ارسال پست جدید", callback_data="social_create_post")],
+        [InlineKeyboardButton("🔥 مشاهده آخرین پست‌ها (Feed)", callback_data="social_feed_0")]
+    ]
+    await update.message.reply_text(
+        "🌐 **شبکه اجتماعی اختصاصی ورزشکاران**\n\n"
+        "در این بخش می‌توانید عکس‌های تمرینات خود را به اشتراک بگذارید و پست‌های بقیه را لایک کنید!",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def show_feed_post(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
+    query = update.callback_query
+    if query:
+        await query.answer()
+
+    try:
+        posts = supabase.table("posts").select("*, users(full_name, role)").order("created_at", desc=True).limit(10).execute().data
+        if not posts:
+            msg = "هنوز پستی ثبت نشده است. اولین نفر باشید! 📸"
+            if query:
+                await query.edit_message_text(msg)
+            else:
+                await update.message.reply_text(msg)
+            return
+
+        if page >= len(posts): page = 0
+        if page < 0: page = len(posts) - 1
+
+        post = posts[page]
+        user_info = post.get("users", {}) or {}
+        author_name = user_info.get("full_name", "ورزشکار")
+        
+        user_id = update.effective_user.id
+        liked_res = supabase.table("likes").select("*").eq("post_id", post["post_id"]).eq("user_id", user_id).execute().data
+        like_icon = "❤️" if len(liked_res) > 0 else "🤍"
+
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("قبلی ⬅️", callback_data=f"social_feed_{page-1}"))
+        if page < len(posts) - 1:
+            nav_buttons.append(InlineKeyboardButton("➡️ بعدی", callback_data=f"social_feed_{page+1}"))
+
+        keyboard = [
+            [InlineKeyboardButton(f"{like_icon} {post['likes_count']}", callback_data=f"like_{post['post_id']}_{page}")],
+            nav_buttons,
+            [InlineKeyboardButton("📸 ارسال پست جدید", callback_data="social_create_post")]
+        ]
+
+        caption_text = f"👤 **{author_name}**\n💬 {post.get('caption', '')}\n\n❤️ لایک‌ها: {post['likes_count']}"
+        chat_id = update.effective_chat.id
+
+        if post.get("photo_file_id"):
+            await context.bot.send_photo(chat_id=chat_id, photo=post["photo_file_id"], caption=caption_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=caption_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    except Exception as e:
+        logger.error(f"Error in show_feed_post: {e}")
+
+async def handle_like(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data.split("_")
+    post_id = int(data[1])
+    page = int(data[2])
+    user_id = query.from_user.id
+
+    try:
+        liked = supabase.table("likes").select("*").eq("post_id", post_id).eq("user_id", user_id).execute().data
+        post = supabase.table("posts").select("likes_count").eq("post_id", post_id).execute().data[0]
+        current_likes = post["likes_count"]
+
+        if liked:
+            supabase.table("likes").delete().eq("post_id", post_id).eq("user_id", user_id).execute()
+            supabase.table("posts").update({"likes_count": max(0, current_likes - 1)}).eq("post_id", post_id).execute()
+            await query.answer("لایک برداشت شد.")
+        else:
+            supabase.table("likes").insert({"post_id": post_id, "user_id": user_id}).execute()
+            supabase.table("posts").update({"likes_count": current_likes + 1}).eq("post_id", post_id).execute()
+            await query.answer("پست لایک شد! ❤️")
+
+        await show_feed_post(update, context, page)
+    except Exception as e:
+        logger.error(f"Error in handle_like: {e}")
+
+# --- ارسال پست جدید ---
+async def start_create_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("📷 لطفاً عکس تمرین خود را بفرستید:")
+    return POST_PHOTO
+
+async def receive_post_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo_file = update.message.photo[-1].file_id
+    context.user_data['post_photo'] = photo_file
+    await update.message.reply_text("✍️ یک متن یا کپشن کوتاه بنویسید:")
+    return POST_CAPTION
+
+async def receive_post_caption(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    caption = update.message.text
+    photo_id = context.user_data.get('post_photo')
+    user_id = update.effective_user.id
+
+    try:
+        supabase.table("posts").insert({
+            "user_id": user_id,
+            "caption": caption,
+            "photo_file_id": photo_id
+        }).execute()
+        await update.message.reply_text("🎉 **پست شما منتشر شد!**", parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
+    except Exception as e:
+        logger.error(f"Error saving post: {e}")
+
+    return ConversationHandler.END
+
+# --- ۵. پروفایل و جدول برترین‌ها ---
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     try:
@@ -383,7 +513,6 @@ async def show_my_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     try:
         plans = supabase.table("workout_plans").select("*").eq("user_id", user_id).order("day_number").execute()
-        
         if not plans.data:
             await update.message.reply_text("هنوز برنامه‌ای ثبت نکرده‌ای!")
             return
@@ -414,7 +543,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error leaderboard: {e}")
 
-# --- ۵. ثبت سایز و وزن جدید ---
+# --- ۶. به‌روزرسانی پارامترهای بدنی ---
 async def start_body_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("وزن جدیدت (کیلوگرم) را بفرست:")
     return BODY_WEIGHT
@@ -473,11 +602,12 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("عملیات لغو شد.", reply_markup=MAIN_KEYBOARD)
     return ConversationHandler.END
 
+# --- اجرای برنامه ---
 def main():
     threading.Thread(target=run_flask, daemon=True).start()
     app = Application.builder().token(BOT_TOKEN).build()
 
-    # آنبوردینگ
+    # Conversation Handlers
     onboarding_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
@@ -492,7 +622,6 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)]
     )
 
-    # ثبت برنامه تمرینی
     plan_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📝 ثبت/بازنویسی برنامه تمرینی$"), start_plan)],
         states={
@@ -507,7 +636,6 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)]
     )
 
-    # به‌روزرسانی پارامترهای بدنی
     body_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📊 ثبت سایز و وزن جدید$"), start_body_update)],
         states={
@@ -519,16 +647,29 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)]
     )
 
+    post_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_create_post, pattern="^social_create_post$")],
+        states={
+            POST_PHOTO: [MessageHandler(filters.PHOTO, receive_post_photo)],
+            POST_CAPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_post_caption)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+
     app.add_handler(onboarding_handler)
     app.add_handler(plan_handler)
     app.add_handler(body_handler)
-    
+    app.add_handler(post_handler)
+
     app.add_handler(MessageHandler(filters.Regex(r"^🏋️‍♂️ شروع تمرین امروز \(باشگاه\)$"), start_gym_session))
+    app.add_handler(MessageHandler(filters.Regex(r"^🌐 شبکه اجتماعی ورزشکاران$"), social_menu))
     app.add_handler(MessageHandler(filters.Regex(r"^👤 پروفایل من$"), show_profile))
     app.add_handler(MessageHandler(filters.Regex(r"^📋 مشاهده برنامه من$"), show_my_plan))
     app.add_handler(MessageHandler(filters.Regex(r"^🏆 جدول رده‌بندی$"), leaderboard))
-    
-    app.add_handler(CallbackQueryHandler(handle_gym_callback))
+
+    app.add_handler(CallbackQueryHandler(handle_gym_callback, pattern="^(start_day_|next_gym_ex|timer_)"))
+    app.add_handler(CallbackQueryHandler(handle_like, pattern="^like_"))
+    app.add_handler(CallbackQueryHandler(lambda u, c: show_feed_post(u, c, int(u.callback_query.data.split('_')[2])), pattern="^social_feed_"))
 
     logger.info("Bot starting...")
     app.run_polling(drop_pending_updates=True)
