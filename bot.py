@@ -41,6 +41,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     GYM_LOG_WEIGHT_REPS, POST_COMMENT_TEXT
 ) = range(22)
 
+# کیبوردهای اصلی
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
         [KeyboardButton("🏋️‍♂️ شروع تمرین امروز (باشگاه)"), KeyboardButton("🌐 شبکه اجتماعی ورزشکاران")],
@@ -48,6 +49,16 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
         [KeyboardButton("👤 پروفایل من"), KeyboardButton("📊 ثبت سایز و وزن جدید")],
         [KeyboardButton("🏆 جدول رده‌بندی")]
     ],
+    resize_keyboard=True
+)
+
+CANCEL_KEYBOARD = ReplyKeyboardMarkup(
+    [[KeyboardButton("❌ انصراف / بازگشت به منوی اصلی")]],
+    resize_keyboard=True
+)
+
+BACK_OR_CANCEL_KEYBOARD = ReplyKeyboardMarkup(
+    [[KeyboardButton("🔙 مرحله قبلی"), KeyboardButton("❌ انصراف")]],
     resize_keyboard=True
 )
 
@@ -65,7 +76,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 f"سلام {user.first_name} عزیز! به آکادمی ورزشی خوش آمدی. 🔥\n"
                 "برای ساخت پروفایل ورزشی، چند سوال کوتاه می‌پرسم.\n\n"
-                "۱. چند سالت است؟ (مثلاً: 25)"
+                "۱. چند سالت است؟ (مثلاً: 25)",
+                reply_markup=CANCEL_KEYBOARD
             )
             return OB_AGE
         else:
@@ -80,58 +92,84 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 async def ob_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف / بازگشت به منوی اصلی":
+        return await cancel(update, context)
     try:
         context.user_data["age"] = int(update.message.text.strip())
     except ValueError:
-        await update.message.reply_text("لطفاً سن را به عدد وارد کن (مثلاً: 25):")
+        await update.message.reply_text("لطفاً سن را به عدد وارد کن (مثلاً: 25):", reply_markup=CANCEL_KEYBOARD)
         return OB_AGE
-    await update.message.reply_text("۲. قدت چند سانتی‌متر است؟ (مثلاً: 180)")
+    await update.message.reply_text("۲. قدت چند سانتی‌متر است؟ (مثلاً: 180)", reply_markup=BACK_OR_CANCEL_KEYBOARD)
     return OB_HEIGHT
 
 async def ob_height(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("۱. چند سالت است؟ (مثلاً: 25)", reply_markup=CANCEL_KEYBOARD)
+        return OB_AGE
     try:
         context.user_data["height"] = float(update.message.text.strip())
     except ValueError:
-        await update.message.reply_text("لطفاً قد را به عدد وارد کن (مثلاً: 180):")
+        await update.message.reply_text("لطفاً قد را به عدد وارد کن (مثلاً: 180):", reply_markup=BACK_OR_CANCEL_KEYBOARD)
         return OB_HEIGHT
-    await update.message.reply_text("۳. وزنت چند کیلوگرم است؟ (مثلاً: 78.5)")
+    await update.message.reply_text("۳. وزنت چند کیلوگرم است؟ (مثلاً: 78.5)", reply_markup=BACK_OR_CANCEL_KEYBOARD)
     return OB_WEIGHT
 
 async def ob_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("۲. قدت چند سانتی‌متر است؟ (مثلاً: 180)", reply_markup=BACK_OR_CANCEL_KEYBOARD)
+        return OB_HEIGHT
     try:
         context.user_data["weight"] = float(update.message.text.strip())
     except ValueError:
-        await update.message.reply_text("لطفاً وزن را به عدد وارد کن:")
+        await update.message.reply_text("لطفاً وزن را به عدد وارد کن:", reply_markup=BACK_OR_CANCEL_KEYBOARD)
         return OB_WEIGHT
-    await update.message.reply_text("۴. دور بازو (سانتی‌متر) - اگر نمی‌دانی عدد 0 را بفرست:")
+    await update.message.reply_text("۴. دور بازو (سانتی‌متر) - اگر نمی‌دانی عدد 0 را بفرست:", reply_markup=BACK_OR_CANCEL_KEYBOARD)
     return OB_ARM
 
 async def ob_arm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("۳. وزنت چند کیلوگرم است؟ (مثلاً: 78.5)", reply_markup=BACK_OR_CANCEL_KEYBOARD)
+        return OB_WEIGHT
     try:
         context.user_data["arm"] = float(update.message.text.strip())
     except ValueError:
         context.user_data["arm"] = 0.0
-    await update.message.reply_text("۵. دور سینه (سانتی‌متر) - یا عدد 0:")
+    await update.message.reply_text("۵. دور سینه (سانتی‌متر) - یا عدد 0:", reply_markup=BACK_OR_CANCEL_KEYBOARD)
     return OB_CHEST
 
 async def ob_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("۴. دور بازو (سانتی‌متر) - یا عدد 0:", reply_markup=BACK_OR_CANCEL_KEYBOARD)
+        return OB_ARM
     try:
         context.user_data["chest"] = float(update.message.text.strip())
     except ValueError:
         context.user_data["chest"] = 0.0
-    await update.message.reply_text("۶. دور کمر (سانتی‌متر) - یا عدد 0:")
+    await update.message.reply_text("۶. دور کمر (سانتی‌متر) - یا عدد 0:", reply_markup=BACK_OR_CANCEL_KEYBOARD)
     return OB_WAIST
 
 async def ob_waist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("۵. دور سینه (سانتی‌متر) - یا عدد 0:", reply_markup=BACK_OR_CANCEL_KEYBOARD)
+        return OB_CHEST
     try:
         context.user_data["waist"] = float(update.message.text.strip())
     except ValueError:
         context.user_data["waist"] = 0.0
-    kb = ReplyKeyboardMarkup([["عضله‌سازی 🏋️‍♂️", "کاهش وزن 🏃‍♂️"], ["آمادگی جسمانی ⚡"]], resize_keyboard=True, one_time_keyboard=True)
+    kb = ReplyKeyboardMarkup([["عضله‌سازی 🏋️‍♂️", "کاهش وزن 🏃‍♂️"], ["آمادگی جسمانی ⚡"], ["🔙 مرحله قبلی", "❌ انصراف"]], resize_keyboard=True)
     await update.message.reply_text("۷. هدف اصلی ورزشی‌ات چیست؟", reply_markup=kb)
     return OB_GOAL
 
 async def ob_goal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("۶. دور کمر (سانتی‌متر) - یا عدد 0:", reply_markup=BACK_OR_CANCEL_KEYBOARD)
+        return OB_WAIST
     goal = update.message.text
     user_id = update.effective_user.id
     try:
@@ -162,13 +200,14 @@ async def ob_goal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- ۲. ثبت برنامه تمرینی ---
 async def start_plan(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("چند روز در هفته برنامه تمرینی داری؟ (عدد بین ۱ تا ۷ بفرست):")
+    await update.message.reply_text("چند روز در هفته برنامه تمرینی داری؟ (عدد بین ۱ تا ۷ بفرست):", reply_markup=CANCEL_KEYBOARD)
     return PLAN_DAYS_COUNT
 
 async def plan_days_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف / بازگشت به منوی اصلی": return await cancel(update, context)
     text = update.message.text.strip()
     if not text.isdigit() or not (1 <= int(text) <= 7):
-        await update.message.reply_text("لطفاً یک عدد معتبر بین ۱ تا ۷ وارد کن.")
+        await update.message.reply_text("لطفاً یک عدد معتبر بین ۱ تا ۷ وارد کن.", reply_markup=CANCEL_KEYBOARD)
         return PLAN_DAYS_COUNT
     
     context.user_data["total_days"] = int(text)
@@ -180,10 +219,11 @@ async def plan_days_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error deleting old plans: {e}")
 
-    await update.message.reply_text("عالیه! نام روز اول تمرین چیست؟ (مثلاً: روز اول - سینه و جلو بازو):")
+    await update.message.reply_text("عالیه! نام روز اول تمرین چیست؟ (مثلاً: روز اول - سینه و جلو بازو):", reply_markup=CANCEL_KEYBOARD)
     return PLAN_DAY_NAME
 
 async def plan_day_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text in ["❌ انصراف", "❌ انصراف / بازگشت به منوی اصلی"]: return await cancel(update, context)
     day_name = update.message.text.strip()
     user_id = update.effective_user.id
     current_day_num = context.user_data["current_day_idx"]
@@ -198,37 +238,41 @@ async def plan_day_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error inserting plan day: {e}")
 
-    await update.message.reply_text(f"روز '{day_name}' چند حرکت تمرینی دارد؟ (مثلاً: 5)")
+    await update.message.reply_text(f"روز '{day_name}' چند حرکت تمرینی دارد؟ (مثلاً: 5)", reply_markup=CANCEL_KEYBOARD)
     return PLAN_EX_COUNT
 
 async def plan_ex_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text in ["❌ انصراف", "❌ انصراف / بازگشت به منوی اصلی"]: return await cancel(update, context)
     cnt = update.message.text.strip()
     if not cnt.isdigit():
-        await update.message.reply_text("لطفاً یک عدد بفرست.")
+        await update.message.reply_text("لطفاً یک عدد بفرست.", reply_markup=CANCEL_KEYBOARD)
         return PLAN_EX_COUNT
     
     context.user_data["total_ex"] = int(cnt)
     context.user_data["current_ex_idx"] = 1
 
-    await update.message.reply_text(f"حرکت ۱ از {cnt}: نام حرکت چیست؟ (مثلاً: پرس سینه دمبل)")
+    await update.message.reply_text(f"حرکت ۱ از {cnt}: نام حرکت چیست؟ (مثلاً: پرس سینه دمبل)", reply_markup=CANCEL_KEYBOARD)
     return PLAN_EX_NAME
 
 async def plan_ex_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text in ["❌ انصراف", "❌ انصراف / بازگشت به منوی اصلی"]: return await cancel(update, context)
     context.user_data["temp_ex_name"] = update.message.text.strip()
-    await update.message.reply_text("تعداد ست و تکرار را بفرست (مثلاً: 4 ست 12 تایی):")
+    await update.message.reply_text("تعداد ست و تکرار را بفرست (مثلاً: 4 ست 12 تایی):", reply_markup=CANCEL_KEYBOARD)
     return PLAN_EX_SETS_REPS
 
 async def plan_ex_sets_reps(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text in ["❌ انصراف", "❌ انصراف / بازگشت به منوی اصلی"]: return await cancel(update, context)
     context.user_data["temp_ex_reps"] = update.message.text.strip()
-    kb = ReplyKeyboardMarkup([["بله 🔗", "خیر ❌"]], resize_keyboard=True, one_time_keyboard=True)
+    kb = ReplyKeyboardMarkup([["بله 🔗", "خیر ❌"], ["❌ انصراف"]], resize_keyboard=True)
     await update.message.reply_text("آیا این حرکت سوپرست است؟", reply_markup=kb)
     return PLAN_EX_SUPERSET
 
 async def plan_ex_superset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+    if text == "❌ انصراف": return await cancel(update, context)
     if "بله" in text:
         context.user_data["temp_is_super"] = True
-        await update.message.reply_text("با چه حرکتی سوپرست است؟ (نام حرکت همراه را بفرست):")
+        await update.message.reply_text("با چه حرکتی سوپرست است؟ (نام حرکت همراه را بفرست):", reply_markup=CANCEL_KEYBOARD)
         return PLAN_EX_SUPERSET_WITH
     else:
         context.user_data["temp_is_super"] = False
@@ -236,6 +280,7 @@ async def plan_ex_superset(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await save_exercise_and_next(update, context)
 
 async def plan_ex_superset_with(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text in ["❌ انصراف", "❌ انصراف / بازگشت به منوی اصلی"]: return await cancel(update, context)
     context.user_data["temp_super_with"] = update.message.text.strip()
     return await save_exercise_and_next(update, context)
 
@@ -258,20 +303,20 @@ async def save_exercise_and_next(update: Update, context: ContextTypes.DEFAULT_T
 
     if curr_ex < tot_ex:
         context.user_data["current_ex_idx"] += 1
-        await update.message.reply_text(f"✅ ذخیره شد.\n\nحرکت {curr_ex + 1} از {tot_ex}: نام حرکت چیست؟")
+        await update.message.reply_text(f"✅ ذخیره شد.\n\nحرکت {curr_ex + 1} از {tot_ex}: نام حرکت چیست؟", reply_markup=CANCEL_KEYBOARD)
         return PLAN_EX_NAME
     else:
         curr_day = context.user_data["current_day_idx"]
         tot_days = context.user_data["total_days"]
         if curr_day < tot_days:
             context.user_data["current_day_idx"] += 1
-            await update.message.reply_text(f"✅ تمام حرکات این روز ثبت شد!\n\nحالا نام روز {curr_day + 1} چیست؟:")
+            await update.message.reply_text(f"✅ تمام حرکات این روز ثبت شد!\n\nحالا نام روز {curr_day + 1} چیست؟:", reply_markup=CANCEL_KEYBOARD)
             return PLAN_DAY_NAME
         else:
             await update.message.reply_text("🔥 برنامه‌ات با موفقیت ذخیره شد.", reply_markup=MAIN_KEYBOARD)
             return ConversationHandler.END
 
-# --- ۳. دستیار هوشمند تمرین (Ultimate Gym Mode) همراه با ثبت وزنه/تکرار و انصراف ---
+# --- ۳. دستیار هوشمند تمرین (Ultimate Gym Mode) ---
 async def start_gym_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     try:
@@ -312,7 +357,8 @@ async def handle_gym_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"📝 **ثبت ست شماره {context.user_data.get('gym_current_set', 1)}**\n"
             "وزنه (کیلوگرم) و تعداد تکرار را به صورت زیر بفرست:\n"
             "فرمت: `وزنه تکرار` (مثلاً: `80 10` یعنی ۸۰ کیلوگرم، ۱۰ تکرار)",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            reply_markup=CANCEL_KEYBOARD
         )
         return GYM_LOG_WEIGHT_REPS
 
@@ -320,6 +366,14 @@ async def handle_gym_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["gym_current_idx"] += 1
         context.user_data["gym_current_set"] = 1
         await show_current_gym_exercise(query, context)
+
+    elif data == "prev_gym_ex":
+        if context.user_data.get("gym_current_idx", 0) > 0:
+            context.user_data["gym_current_idx"] -= 1
+            context.user_data["gym_current_set"] = 1
+            await show_current_gym_exercise(query, context)
+        else:
+            await query.answer("شما در اولین حرکت هستید!", show_alert=True)
 
     elif data == "cancel_gym_session":
         context.user_data.pop("gym_exercises", None)
@@ -332,16 +386,17 @@ async def handle_gym_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await start_rest_timer(query, context, seconds)
 
 async def receive_gym_set_log(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف / بازگشت به منوی اصلی": return await cancel(update, context)
     text = update.message.text.strip().split()
     if len(text) < 2:
-        await update.message.reply_text("فرمت اشتباه است! لطفاً دو عدد با فاصله بفرستید (مثال: 80 10):")
+        await update.message.reply_text("فرمت اشتباه است! لطفاً دو عدد با فاصله بفرستید (مثال: 80 10):", reply_markup=CANCEL_KEYBOARD)
         return GYM_LOG_WEIGHT_REPS
     
     try:
         weight = float(text[0])
         reps = int(text[1])
     except ValueError:
-        await update.message.reply_text("لطفاً اعداد معتبر وارد کنید (مثال: 80 10):")
+        await update.message.reply_text("لطفاً اعداد معتبر وارد کنید (مثال: 80 10):", reply_markup=CANCEL_KEYBOARD)
         return GYM_LOG_WEIGHT_REPS
 
     user_id = update.effective_user.id
@@ -365,7 +420,6 @@ async def receive_gym_set_log(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["gym_current_set"] = current_set + 1
         await update.message.reply_text(f"✅ ست {current_set} ذخیره شد ({weight}kg × {reps} تکرار).")
         
-        # نمایش مجدد وضعیت حرکت
         chat_id = update.effective_chat.id
         msg = await context.bot.send_message(chat_id=chat_id, text="🔄 در حال به‌روزرسانی...")
         
@@ -399,11 +453,10 @@ async def show_current_gym_exercise(query, context):
     idx = context.user_data.get("gym_current_idx", 0)
     exercises = context.user_data.get("gym_exercises", [])
     current_set = context.user_data.get("gym_current_set", 1)
+    user_id = query.from_user.id
     
     if idx >= len(exercises):
-        user_id = query.from_user.id
         today = str(datetime.date.today())
-        
         try:
             res = supabase.table("users").select("points").eq("user_id", user_id).execute()
             pts = res.data[0].get("points") or 0 if res.data else 0
@@ -417,16 +470,32 @@ async def show_current_gym_exercise(query, context):
         return
 
     ex = exercises[idx]
+    
+    # ایده ۱: دریافت سابقه آخرین رکورد کاربر در این حرکت
+    last_log_txt = "هنوز رکوردی ثبت نشده"
+    try:
+        last_log = supabase.table("workout_logs").select("*").eq("user_id", user_id).eq("exercise_name", ex['exercise_name']).order("created_at", desc=True).limit(1).execute().data
+        if last_log:
+            last_log_txt = f"{last_log[0]['weight_kg']}kg × {last_log[0]['reps']} تکرار"
+    except Exception as e:
+        logger.error(f"Error fetching last log: {e}")
+
     txt = f"🏋️‍♂️ **حرکت {idx + 1} از {len(exercises)}**\n"
     txt += "━━━━━━━\n"
     txt += f"📌 **نام حرکت:** {ex['exercise_name']}\n"
     txt += f"🔢 **برنامه:** {ex['reps']}\n"
     txt += f"📍 **ست فعلی:** ست شماره {current_set}\n"
+    txt += f"📊 **آخرین رکورد شما:** {last_log_txt}\n"
     
     if ex.get("is_superset"):
         txt += f"🔥 **سوپرست با:** {ex.get('superset_with')}\n"
 
     txt += "\n⏱️ **تایمر استراحت بین ست‌ها:**"
+
+    nav_btns = []
+    if idx > 0:
+        nav_btns.append(InlineKeyboardButton("⬅️ حرکت قبلی", callback_data="prev_gym_ex"))
+    nav_btns.append(InlineKeyboardButton("انجام شد (حرکت بعدی ➔)", callback_data="next_gym_ex"))
 
     kb = InlineKeyboardMarkup([
         [
@@ -435,7 +504,7 @@ async def show_current_gym_exercise(query, context):
             InlineKeyboardButton("⏱️ ۱۲۰ ثانیه", callback_data="timer_120")
         ],
         [InlineKeyboardButton("✍️ ثبت وزنه و تکرار این ست", callback_data="log_gym_set")],
-        [InlineKeyboardButton("✅ انجام شد (حرکت بعدی ➔)", callback_data="next_gym_ex")],
+        nav_btns,
         [InlineKeyboardButton("🔴 انصراف و لغو تمرین", callback_data="cancel_gym_session")]
     ])
     await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=kb)
@@ -444,7 +513,8 @@ async def show_current_gym_exercise(query, context):
 async def social_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("📸 ارسال پست جدید", callback_data="social_create_post")],
-        [InlineKeyboardButton("🔥 مشاهده آخرین پست‌ها (Feed)", callback_data="social_feed_0")]
+        [InlineKeyboardButton("🔥 مشاهده آخرین پست‌ها (Feed)", callback_data="social_feed_0")],
+        [InlineKeyboardButton("❌ بازگشت به منوی اصلی", callback_data="social_close_menu")]
     ]
     await update.message.reply_text(
         "🌐 **شبکه اجتماعی اختصاصی ورزشکاران**\n\n"
@@ -453,19 +523,26 @@ async def social_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+async def handle_social_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data == "social_close_menu":
+        await query.message.delete()
+        await context.bot.send_message(chat_id=query.message.chat_id, text="بازگشت به منوی اصلی:", reply_markup=MAIN_KEYBOARD)
+    elif data.startswith("social_feed_"):
+        page = int(data.split("_")[2])
+        await show_feed_post(update, context, page)
+
 async def show_feed_post(update: Update, context: ContextTypes.DEFAULT_TYPE, page: int = 0):
     query = update.callback_query
-    if query:
-        await query.answer()
-
     try:
         posts = supabase.table("posts").select("*, users(full_name, role)").order("created_at", desc=True).limit(10).execute().data
         if not posts:
             msg = "هنوز پستی ثبت نشده است. اولین نفر باشید! 📸"
-            if query:
-                await query.edit_message_text(msg)
-            else:
-                await update.message.reply_text(msg)
+            if query: await query.edit_message_text(msg)
+            else: await update.message.reply_text(msg)
             return
 
         if page >= len(posts): page = 0
@@ -483,7 +560,7 @@ async def show_feed_post(update: Update, context: ContextTypes.DEFAULT_TYPE, pag
         comments_res = supabase.table("comments").select("*, users(full_name)").eq("post_id", post["post_id"]).order("created_at", desc=False).execute().data
         comments_txt = "\n💬 **نظرات:**\n"
         if comments_res:
-            for c in comments_res[-3:]:  # نمایش ۳ کامنت آخر
+            for c in comments_res[-3:]:
                 c_name = (c.get("users") or {}).get("full_name", "کاربر")
                 comments_txt += f"▫️ **{c_name}:** {c['text']}\n"
         else:
@@ -501,7 +578,8 @@ async def show_feed_post(update: Update, context: ContextTypes.DEFAULT_TYPE, pag
                 InlineKeyboardButton("💬 ثبت نظر", callback_data=f"comment_{post['post_id']}_{page}")
             ],
             nav_buttons,
-            [InlineKeyboardButton("📸 ارسال پست جدید", callback_data="social_create_post")]
+            [InlineKeyboardButton("📸 ارسال پست جدید", callback_data="social_create_post")],
+            [InlineKeyboardButton("❌ بازگشت به منوی اصلی", callback_data="social_close_menu")]
         ]
 
         caption_text = f"👤 **{author_name}**\n💬 {post.get('caption', '')}\n\n❤️ لایک‌ها: {post['likes_count']}{comments_txt}"
@@ -548,10 +626,11 @@ async def start_add_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["comment_post_id"] = int(data[1])
     context.user_data["comment_post_page"] = int(data[2])
 
-    await query.message.reply_text("✍️ نظر خود را برای این پست بنویسید:")
+    await query.message.reply_text("✍️ نظر خود را برای این پست بنویسید:", reply_markup=CANCEL_KEYBOARD)
     return POST_COMMENT_TEXT
 
 async def receive_comment_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف / بازگشت به منوی اصلی": return await cancel(update, context)
     comment_text = update.message.text.strip()
     post_id = context.user_data.get("comment_post_id")
     page = context.user_data.get("comment_post_page", 0)
@@ -563,7 +642,7 @@ async def receive_comment_text(update: Update, context: ContextTypes.DEFAULT_TYP
             "user_id": user_id,
             "text": comment_text
         }).execute()
-        await update.message.reply_text("💬 نظر شما با موفقیت ثبت شد!")
+        await update.message.reply_text("💬 نظر شما با موفقیت ثبت شد!", reply_markup=MAIN_KEYBOARD)
     except Exception as e:
         logger.error(f"Error saving comment: {e}")
 
@@ -575,23 +654,29 @@ async def receive_comment_text(update: Update, context: ContextTypes.DEFAULT_TYP
         async def edit_message_text(self, text, parse_mode=None, reply_markup=None): pass
 
     dummy = DummyQuery(update.message, update.effective_user)
-    await show_feed_post(update, context, page)
+    await show_feed_post(dummy, context, page)
     return ConversationHandler.END
 
 # --- ارسال پست جدید ---
 async def start_create_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text("📷 لطفاً عکس تمرین خود را بفرستید:")
+    await query.message.reply_text("📷 لطفاً عکس تمرین خود را بفرستید:", reply_markup=CANCEL_KEYBOARD)
     return POST_PHOTO
 
 async def receive_post_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف / بازگشت به منوی اصلی": return await cancel(update, context)
+    if not update.message.photo:
+        await update.message.reply_text("لطفاً یک عکس معتبر بفرستید:", reply_markup=CANCEL_KEYBOARD)
+        return POST_PHOTO
+        
     photo_file = update.message.photo[-1].file_id
     context.user_data['post_photo'] = photo_file
-    await update.message.reply_text("✍️ یک متن یا کپشن کوتاه بنویسید:")
+    await update.message.reply_text("✍️ یک متن یا کپشن کوتاه بنویسید:", reply_markup=CANCEL_KEYBOARD)
     return POST_CAPTION
 
 async def receive_post_caption(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف / بازگشت به منوی اصلی": return await cancel(update, context)
     caption = update.message.text
     photo_id = context.user_data.get('post_photo')
     user_id = update.effective_user.id
@@ -618,14 +703,36 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         u = res.data[0]
+        
+        # ایده ۲: محاسبه شاخص BMI و وضعیت بدنی
+        h_m = (u.get('height') or 0) / 100.0
+        w = u.get('weight') or 0
+        bmi_txt = "-"
+        if h_m > 0 and w > 0:
+            bmi = round(w / (h_m ** 2), 1)
+            if bmi < 18.5: status = "کمبود وزن 🦴"
+            elif 18.5 <= bmi < 25: status = "نرمال و ایده‌آل 🏋️‍♂️"
+            elif 25 <= bmi < 30: status = "اضافه وزن 🏃‍♂️"
+            else: status = "چاقی ⚠️"
+            bmi_txt = f"{bmi} ({status})"
+
         txt = f"👤 **پروفایل ورزشی {u['full_name']}**\n\n"
         txt += f"📏 قد: {u.get('height', '-')} سانتی‌متر\n"
         txt += f"⚖️ وزن: {u.get('weight', '-')} کیلوگرم\n"
+        txt += f"📊 شاخص BMI: {bmi_txt}\n"
         txt += f"💪 دور بازو: {u.get('arm_size', '-')} cm\n"
         txt += f"🩺 دور سینه: {u.get('chest_size', '-')} cm\n"
         txt += f"📐 دور کمر: {u.get('waist_size', '-')} cm\n"
         txt += f"🎯 هدف: {u.get('target_goal', '-')}\n"
         txt += f"🪙 امتیاز کل: {u.get('points', 0)}"
+
+        # ایده ۳: نمودار پیشرفت تغییرات وزن
+        history = supabase.table("body_metrics_history").select("*").eq("user_id", user_id).order("recorded_at", desc=False).limit(5).execute().data
+        if history and len(history) > 1:
+            txt += "\n\n📈 **روند تغییرات وزن (تاکنون):**\n"
+            for h in history:
+                rec_date = h.get('recorded_at', '')[:10]
+                txt += f"▫️ {rec_date}: {h.get('weight')} kg\n"
 
         await update.message.reply_text(txt, parse_mode="Markdown")
     except Exception as e:
@@ -658,44 +765,60 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         res = supabase.table("users").select("full_name, points").order("points", desc=True).limit(10).execute()
         msg = "🏆 **جدول برترین‌های باشگاه:**\n\n"
+        medals = ["🥇", "🥈", "🥉"]
         for idx, row in enumerate(res.data, 1):
             pts = row.get('points') or 0
-            msg += f"{idx}. {row['full_name']} — {pts} امتیاز\n"
+            m = medals[idx-1] if idx <= 3 else f"{idx}."
+            msg += f"{m} {row['full_name']} — {pts} امتیاز\n"
         await update.message.reply_text(msg, parse_mode="Markdown")
     except Exception as e:
         logger.error(f"Error leaderboard: {e}")
 
 # --- ۶. به‌روزرسانی پارامترهای بدنی ---
 async def start_body_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("وزن جدیدت (کیلوگرم) را بفرست:")
+    await update.message.reply_text("وزن جدیدت (کیلوگرم) را بفرست:", reply_markup=CANCEL_KEYBOARD)
     return BODY_WEIGHT
 
 async def body_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف / بازگشت به منوی اصلی": return await cancel(update, context)
     try:
         context.user_data["bw"] = float(update.message.text.strip())
     except ValueError:
-        await update.message.reply_text("عدد معتبر بفرست:")
+        await update.message.reply_text("عدد معتبر بفرست:", reply_markup=CANCEL_KEYBOARD)
         return BODY_WEIGHT
-    await update.message.reply_text("دور بازوی جدید (cm):")
+    await update.message.reply_text("دور بازوی جدید (cm):", reply_markup=BACK_OR_CANCEL_KEYBOARD)
     return BODY_ARM
 
 async def body_arm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("وزن جدیدت (کیلوگرم) را بفرست:", reply_markup=CANCEL_KEYBOARD)
+        return BODY_WEIGHT
     try:
         context.user_data["ba"] = float(update.message.text.strip())
     except ValueError:
         context.user_data["ba"] = 0.0
-    await update.message.reply_text("دور سینه‌ی جدید (cm):")
+    await update.message.reply_text("دور سینه‌ی جدید (cm):", reply_markup=BACK_OR_CANCEL_KEYBOARD)
     return BODY_CHEST
 
 async def body_chest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("دور بازوی جدید (cm):", reply_markup=BACK_OR_CANCEL_KEYBOARD)
+        return BODY_ARM
     try:
         context.user_data["bc"] = float(update.message.text.strip())
     except ValueError:
         context.user_data["bc"] = 0.0
-    await update.message.reply_text("دور کمر جدید (cm):")
+    await update.message.reply_text("دور کمر جدید (cm):", reply_markup=BACK_OR_CANCEL_KEYBOARD)
     return BODY_WAIST
 
 async def body_waist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "❌ انصراف": return await cancel(update, context)
+    if update.message.text == "🔙 مرحله قبلی":
+        await update.message.reply_text("دور سینه‌ی جدید (cm):", reply_markup=BACK_OR_CANCEL_KEYBOARD)
+        return BODY_CHEST
+        
     user_id = update.effective_user.id
     bw = context.user_data.get("bw", 0.0)
     ba = context.user_data.get("ba", 0.0)
@@ -721,98 +844,124 @@ async def body_waist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("عملیات لغو شد.", reply_markup=MAIN_KEYBOARD)
+    await update.message.reply_text("عملیات لغو شد. به منوی اصلی برگشتید.", reply_markup=MAIN_KEYBOARD)
     return ConversationHandler.END
+
+# --- ۷. ایده ۶: یادآور عدم فعالیت (Background Task) ---
+async def inactivity_reminder_job(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        three_days_ago = str(datetime.date.today() - datetime.timedelta(days=3))
+        res = supabase.table("users").select("user_id, full_name").lt("last_workout_date", three_days_ago).execute()
+        if res.data:
+            for u in res.data:
+                try:
+                    await context.bot.send_message(
+                        chat_id=u["user_id"],
+                        text=f"سلام {u['full_name']} عزیز! 🏋️‍♂️\n"
+                             "۳ روز است که تمرین ثبت نکرده‌ای. بی‌خیال هدف‌ها نشو! امروز وقتشه که بترکونی 💪🔥"
+                    )
+                except Exception as ex:
+                    logger.error(f"Could not send reminder to {u['user_id']}: {ex}")
+    except Exception as e:
+        logger.error(f"Error in inactivity reminder: {e}")
 
 # --- اجرای برنامه ---
 def main():
     threading.Thread(target=run_flask, daemon=True).start()
     app = Application.builder().token(BOT_TOKEN).build()
 
+    # فعال‌سازی JobQueue برای یادآور عدم فعالیت (اجرا هر ۲۴ ساعت)
+    job_queue = app.job_queue
+    if job_queue:
+        job_queue.run_repeating(inactivity_reminder_job, interval=86400, first=10)
+
     # Conversation Handlers
     onboarding_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            OB_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ob_age)],
-            OB_HEIGHT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ob_height)],
-            OB_WEIGHT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ob_weight)],
-            OB_ARM: [MessageHandler(filters.TEXT & ~filters.COMMAND, ob_arm)],
-            OB_CHEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, ob_chest)],
-            OB_WAIST: [MessageHandler(filters.TEXT & ~filters.COMMAND, ob_waist)],
-            OB_GOAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, ob_goal)],
+            OB_AGE: [MessageHandler(filters.TEXT, ob_age)],
+            OB_HEIGHT: [MessageHandler(filters.TEXT, ob_height)],
+            OB_WEIGHT: [MessageHandler(filters.TEXT, ob_weight)],
+            OB_ARM: [MessageHandler(filters.TEXT, ob_arm)],
+            OB_CHEST: [MessageHandler(filters.TEXT, ob_chest)],
+            OB_WAIST: [MessageHandler(filters.TEXT, ob_waist)],
+            OB_GOAL: [MessageHandler(filters.TEXT, ob_goal)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[MessageHandler(filters.Regex("^❌ انصراف"), cancel)]
     )
 
     plan_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📝 ثبت/بازنویسی برنامه تمرینی$"), start_plan)],
         states={
-            PLAN_DAYS_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, plan_days_count)],
-            PLAN_DAY_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, plan_day_name)],
-            PLAN_EX_COUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, plan_ex_count)],
-            PLAN_EX_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, plan_ex_name)],
-            PLAN_EX_SETS_REPS: [MessageHandler(filters.TEXT & ~filters.COMMAND, plan_ex_sets_reps)],
-            PLAN_EX_SUPERSET: [MessageHandler(filters.TEXT & ~filters.COMMAND, plan_ex_superset)],
-            PLAN_EX_SUPERSET_WITH: [MessageHandler(filters.TEXT & ~filters.COMMAND, plan_ex_superset_with)],
+            PLAN_DAYS_COUNT: [MessageHandler(filters.TEXT, plan_days_count)],
+            PLAN_DAY_NAME: [MessageHandler(filters.TEXT, plan_day_name)],
+            PLAN_EX_COUNT: [MessageHandler(filters.TEXT, plan_ex_count)],
+            PLAN_EX_NAME: [MessageHandler(filters.TEXT, plan_ex_name)],
+            PLAN_EX_SETS_REPS: [MessageHandler(filters.TEXT, plan_ex_sets_reps)],
+            PLAN_EX_SUPERSET: [MessageHandler(filters.TEXT, plan_ex_superset)],
+            PLAN_EX_SUPERSET_WITH: [MessageHandler(filters.TEXT, plan_ex_superset_with)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[MessageHandler(filters.Regex("^❌ انصراف"), cancel)]
     )
 
-    body_handler = ConversationHandler(
+    body_update_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^📊 ثبت سایز و وزن جدید$"), start_body_update)],
         states={
-            BODY_WEIGHT: [MessageHandler(filters.TEXT & ~filters.COMMAND, body_weight)],
-            BODY_ARM: [MessageHandler(filters.TEXT & ~filters.COMMAND, body_arm)],
-            BODY_CHEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, body_chest)],
-            BODY_WAIST: [MessageHandler(filters.TEXT & ~filters.COMMAND, body_waist)],
+            BODY_WEIGHT: [MessageHandler(filters.TEXT, body_weight)],
+            BODY_ARM: [MessageHandler(filters.TEXT, body_arm)],
+            BODY_CHEST: [MessageHandler(filters.TEXT, body_chest)],
+            BODY_WAIST: [MessageHandler(filters.TEXT, body_waist)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
-    )
-
-    post_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(start_create_post, pattern="^social_create_post$")],
-        states={
-            POST_PHOTO: [MessageHandler(filters.PHOTO, receive_post_photo)],
-            POST_CAPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_post_caption)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[MessageHandler(filters.Regex("^❌ انصراف"), cancel)]
     )
 
     gym_log_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(handle_gym_callback, pattern="^log_gym_set$")],
         states={
-            GYM_LOG_WEIGHT_REPS: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_gym_set_log)],
+            GYM_LOG_WEIGHT_REPS: [MessageHandler(filters.TEXT, receive_gym_set_log)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[MessageHandler(filters.Regex("^❌ انصراف"), cancel)]
     )
 
-    comment_handler = ConversationHandler(
+    create_post_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_create_post, pattern="^social_create_post$")],
+        states={
+            POST_PHOTO: [MessageHandler(filters.PHOTO | filters.TEXT, receive_post_photo)],
+            POST_CAPTION: [MessageHandler(filters.TEXT, receive_post_caption)],
+        },
+        fallbacks=[MessageHandler(filters.Regex("^❌ انصراف"), cancel)]
+    )
+
+    add_comment_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(start_add_comment, pattern="^comment_")],
         states={
-            POST_COMMENT_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_comment_text)],
+            POST_COMMENT_TEXT: [MessageHandler(filters.TEXT, receive_comment_text)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[MessageHandler(filters.Regex("^❌ انصراف"), cancel)]
     )
 
+    # ثبت هندلرها
     app.add_handler(onboarding_handler)
     app.add_handler(plan_handler)
-    app.add_handler(body_handler)
-    app.add_handler(post_handler)
+    app.add_handler(body_update_handler)
     app.add_handler(gym_log_handler)
-    app.add_handler(comment_handler)
+    app.add_handler(create_post_handler)
+    app.add_handler(add_comment_handler)
 
-    app.add_handler(MessageHandler(filters.Regex(r"^🏋️‍♂️ شروع تمرین امروز \(باشگاه\)$"), start_gym_session))
-    app.add_handler(MessageHandler(filters.Regex(r"^🌐 شبکه اجتماعی ورزشکاران$"), social_menu))
-    app.add_handler(MessageHandler(filters.Regex(r"^👤 پروفایل من$"), show_profile))
-    app.add_handler(MessageHandler(filters.Regex(r"^📋 مشاهده برنامه من$"), show_my_plan))
-    app.add_handler(MessageHandler(filters.Regex(r"^🏆 جدول رده‌بندی$"), leaderboard))
-
-    app.add_handler(CallbackQueryHandler(handle_gym_callback, pattern="^(start_day_|next_gym_ex|timer_|cancel_gym_session)"))
+    # Callback Query Handlers
+    app.add_handler(CallbackQueryHandler(handle_gym_callback, pattern="^(start_day_|next_gym_ex|prev_gym_ex|cancel_gym_session|timer_)"))
+    app.add_handler(CallbackQueryHandler(handle_social_callback, pattern="^(social_close_menu|social_feed_)"))
     app.add_handler(CallbackQueryHandler(handle_like, pattern="^like_"))
-    app.add_handler(CallbackQueryHandler(lambda u, c: show_feed_post(u, c, int(u.callback_query.data.split('_')[2])), pattern="^social_feed_"))
 
-    logger.info("Bot starting...")
-    app.run_polling(drop_pending_updates=True)
+    # Message Handlers دکمه‌های اصلی
+    app.add_handler(MessageHandler(filters.Regex("^🏋️‍♂️ شروع تمرین امروز \(باشگاه\)$"), start_gym_session))
+    app.add_handler(MessageHandler(filters.Regex("^🌐 شبکه اجتماعی ورزشکاران$"), social_menu))
+    app.add_handler(MessageHandler(filters.Regex("^📋 مشاهده برنامه من$"), show_my_plan))
+    app.add_handler(MessageHandler(filters.Regex("^👤 پروفایل من$"), show_profile))
+    app.add_handler(MessageHandler(filters.Regex("^🏆 جدول رده‌بندی$"), leaderboard))
+
+    logger.info("Bot is starting...")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
