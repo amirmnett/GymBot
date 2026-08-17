@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from supabase import create_client, Client
 
-# ۱. ساخت سرور کوچک Flask برای زنده نگه داشتن سرویس در Render
+# ۱. وب‌سرور کوچک برای آنلاین نگه‌داشتن Render
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -17,14 +17,25 @@ def run_flask():
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host="0.0.0.0", port=port)
 
-# ۲. متغیرهای محیطی
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+# ۲. دریافت و اعتبارسنجی متغیرهای محیطی
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
 
+# بررسی صحت متغیرها قبل از اجرا
+if not SUPABASE_URL or not SUPABASE_URL.startswith("http"):
+    raise ValueError(f"CRITICAL ERROR: SUPABASE_URL is invalid or missing! Current value: '{SUPABASE_URL}'")
+
+if not SUPABASE_KEY:
+    raise ValueError("CRITICAL ERROR: SUPABASE_KEY is missing!")
+
+if not BOT_TOKEN:
+    raise ValueError("CRITICAL ERROR: BOT_TOKEN is missing!")
+
+# ۳. اتصال به دیتابیس
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ۳. منطق بات تلگرام
+# ۴. منطق بات تلگرام
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     supabase.table("users").upsert({
@@ -75,10 +86,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text, parse_mode="Markdown")
 
 def main():
-    # اجرای Flask در یک Thread جداگانه
     threading.Thread(target=run_flask, daemon=True).start()
-
-    # اجرای بات تلگرام
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
