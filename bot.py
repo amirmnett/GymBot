@@ -4,11 +4,12 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from supabase import create_client, Client
 
-# تنظیمات کلیدها
+# خواندن مقادیر حساس از متغیرهای محیطی Render
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
+# اتصال به دیتابیس Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # دستور start/
@@ -23,8 +24,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton("🏋️‍♂️ ثبت تمرین امروز", callback_data="log_workout")],
-        [InlineKeyboardButton("🏆 جدول رده‌بندی (رنکینگ)", callback_data="leaderboard")],
-        [InlineKeyboardButton("⚖️ ثبت/آپدیت وزن", callback_data="ask_weight")]
+        [InlineKeyboardButton("🏆 جدول رده‌بندی (رنکینگ)", callback_data="leaderboard")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -34,7 +34,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# دکمه‌ها
+# مدیریت دکمه‌های شیشه‌ای
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
